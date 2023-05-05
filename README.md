@@ -36,7 +36,7 @@ You can adjust the following parameters to customize the script's behavior:
 
 All contributors are welcome.
 
-###For GitHub
+### For GitHub
 
 For changes, please open an issue first to discuss what you would like to change.
 
