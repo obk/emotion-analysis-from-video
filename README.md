@@ -34,7 +34,15 @@ You can adjust the following parameters to customize the script's behavior:
 
 ## Contributing
 
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+All contributors are welcome.
+
+###For GitHub
+
+For changes, please open an issue first to discuss what you would like to change.
+
+### For sourcehut
+
+Prepare a [patchset](https://man.sr.ht/git.sr.ht/#2-preparing-the-patchset).
 
 Please make sure to update tests as appropriate.
 
