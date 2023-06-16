@@ -1,51 +1,50 @@
-# Emotion Detection in Video using DeepFace
+Emotion Detection from Video Script
+===================================
 
-This is a Python script that analyzes the emotions in a video using the DeepFace library and detects changes in the dominant emotion over time.
+This Python script is designed to download a video file from a Firebase storage bucket and perform real-time emotion detection on faces present in the video. It uses the DeepFace library to perform face detection and emotion analysis.
 
-## Requirements
+Dependencies
+------------
 
-- Python 3.x
-- OpenCV
-- DeepFace
+*   Python 3.x
+*   OpenCV (cv2)
+*   shutil
+*   pandas
+*   DeepFace
+*   firebase\_admin
 
-You can install OpenCV and DeepFace using pip:
+Usage
+-----
 
-```
-pip install opencv-python
-pip install deepface
-```
+Before running the script, make sure that you have the required dependencies installed:
 
+    pip install opencv-python pandas deepface firebase-admin
 
-## Usage
+Also, you need to make sure that you have a service account key file named `serviceAccountKey.json` for Firebase authentication.
 
-1. Clone the repository or download the script.
-2. Install the requirements.
-3. Replace "video.mp4" with the path to your video file.
-4. Run the script.
+To execute the script, simply run the Python script in your terminal or command prompt.
 
-The script will output a list of emotion changes in the video, including the start and end time of each change and the dominant emotion during that period.
+    python manin.py
 
-## Parameters
+How It Works
+------------
 
-You can adjust the following parameters to customize the script's behavior:
+1.  Initializes connection with Firebase using a service account key.
+2.  Lists all files in the Firebase storage bucket and downloads the latest file based on the timestamp.
+3.  Uses OpenCV to capture video frames.
+4.  For each frame, it extracts faces using DeepFace.
+5.  Analyzes the emotions of the detected faces.
+6.  Stores and prints the dominant emotion for each frame.
+7.  Prints a message if the dominant emotion changes.
+8.  Releases the video capture object and closes any OpenCV windows.
 
-- `emotion_duration_threshold`: The minimum duration (in seconds) for an emotion to be considered a distinct period. Default is 0.5 seconds.
-- `actions`: A list of DeepFace actions to perform on the video frame. Default is ['emotion'].
+Notes
+-----
 
-## Contributing
+*   The script only takes the top half of each frame for emotion detection.
+*   If running the script with a GUI, a window showing the detected face will be displayed. Press 'q' to quit.
 
-All contributors are welcome.
+License
+-------
 
-### For GitHub
-
-For changes, please open an issue first to discuss what you would like to change.
-
-### For sourcehut
-
-Prepare a [patchset](https://man.sr.ht/git.sr.ht/#2-preparing-the-patchset).
-
-Please make sure to update tests as appropriate.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the terms of the MIT license.
