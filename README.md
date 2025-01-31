@@ -1,50 +1,54 @@
-Emotion Detection from Video Script
-===================================
 
-This Python script is designed to download a video file from a Firebase storage bucket and perform real-time emotion detection on faces present in the video. It uses the DeepFace library to perform face detection and emotion analysis.
+markdown
+# emotion analysis on videos
 
-Dependencies
-------------
+this python script performs emotion analysis on videos using deep learning models. it leverages opencv for face detection and deepface for emotion recognition. the script is designed to be efficient by parallelizing the processing of video frames.
 
-*   Python 3.x
-*   OpenCV (cv2)
-*   shutil
-*   pandas
-*   DeepFace
-*   firebase\_admin
+## features
 
-Usage
------
+- **hybrid face detection**: combines opencv's haar cascades with deepface to improve accuracy.
+- **parallel processing**: utilizes `threadpoolexecutor` to process multiple frames in parallel, reducing overall execution time.
+- **efficient data structures**: uses futures to handle asynchronous results efficiently.
+- **temporal smoothing**: smooths emotion predictions over a temporal window for better reliability.
 
-Before running the script, make sure that you have the required dependencies installed:
+## prerequisites
 
-    pip install opencv-python pandas deepface firebase-admin
+before running the script, ensure you have the following dependencies installed:
 
-Also, you need to make sure that you have a service account key file named `serviceAccountKey.json` for Firebase authentication.
+```bash
+pip install opencv-python-headless deepface pandas
+```
 
-To execute the script, simply run the Python script in your terminal or command prompt.
+## how to run
 
-    python manin.py
+1. save the script as `app.py`.
+2. open a terminal or command prompt.
+3. navigate to the directory where `app.py` is located.
+4. run the script with the path to your video file:
 
-How It Works
-------------
+```bash
+python app.py <video_path>
+```
 
-1.  Initializes connection with Firebase using a service account key.
-2.  Lists all files in the Firebase storage bucket and downloads the latest file based on the timestamp.
-3.  Uses OpenCV to capture video frames.
-4.  For each frame, it extracts faces using DeepFace.
-5.  Analyzes the emotions of the detected faces.
-6.  Stores and prints the dominant emotion for each frame.
-7.  Prints a message if the dominant emotion changes.
-8.  Releases the video capture object and closes any OpenCV windows.
+replace `<video_path>` with the actual path to your video file.
 
-Notes
------
+## example
 
-*   The script only takes the top half of each frame for emotion detection.
-*   If running the script with a GUI, a window showing the detected face will be displayed. Press 'q' to quit.
+if you have a video file named `example.mp4`, you would run:
 
-License
--------
+```bash
+python app.py example.mp4
+```
 
-This project is licensed under the terms of the MIT license.
+the script will output the dominant emotion detected in each second of the video.
+
+## license
+
+this project is licensed under the mit license - see the [license](license) file for details.
+```
+
+### additional notes
+
+- **video path**: the script expects a single argument, which is the path to the video file. if you have multiple videos, you'll need to run the script separately for each one.
+- **resource management**: the script uses `threadpoolexecutor` with a limited number of workers (4 by default). adjust this based on your system's capabilities and resource usage.
+
