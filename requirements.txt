@@ -1,5 +1,0 @@
-python_version==3.x
-opencv-python
-shutil
-pandas
-deepface
