@@ -1,46 +1,49 @@
-from flask import Flask, jsonify, request
-import os
 import cv2
-import shutil
-import pandas as pd
+import numpy as np
 from deepface import DeepFace
-import firebase_admin
-from firebase_admin import credentials, storage
+import pandas as pd
 
-app = Flask(__name__)
+# Constants for optimization
+FRAME_SKIP = 5  # Skip frames to reduce noise
+EMOTION_CONFIDENCE_THRESHOLD = 0.8  # Ignore low-confidence predictions
+TEMPORAL_WINDOW_SIZE = 5  # Window size for temporal smoothing
 
-cred = credentials.Certificate("./serviceAccountKey.json")
-firebase_admin.initialize_app(cred, {
-    'storageBucket': 'emocall-edd87.appspot.com'
-})
+def preprocess_face(face_image):
+    """Normalize brightness/contrast and resize face."""
+    # Normalize brightness/contrast (optional)
+    alpha = 1.2  # Contrast control (1.0-3.0)
+    beta = 30   # Brightness control (0-100)
+    adjusted = cv2.convertScaleAbs(face_image, alpha=alpha, beta=beta)
 
-@app.route('/')
-def home():
-    return 'Server is running.'
+    # Resize face to a fixed size
+    target_size = (224, 224)  # Size expected by DeepFace
+    resized_face = cv2.resize(adjusted, target_size, interpolation=cv2.INTER_LINEAR)
+    
+    return resized_face
 
-@app.route('/start', methods=['GET','POST'])
-def start_analysis():
-    result = run_analysis()
-    return jsonify(result)
+def hybrid_face_detection(frame):
+    """Hybrid approach with OpenCV Haar Cascades + DeepFace."""
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+    
+    # Use Haar Cascades for initial detection
+    faces_haar = face_cascade.detectMultiScale(gray, scaleFactor=1.3, minNeighbors=5, minSize=(30, 30))
+    
+    # Refine detections with DeepFace
+    refined_faces = []
+    for (x, y, w, h) in faces_haar:
+        roi = frame[y:y+h, x:x+w]
+        result = DeepFace.extract_faces(roi, enforce_detection=False)
+        if len(result) > 0:
+            refined_faces.append((x, y, w, h))
+    
+    return refined_faces
 
-def run_analysis():
+def run_analysis(video_path):
     try:
-        print('Running analysis...')
-
-        bucket = storage.bucket()
-        blobs = bucket.list_blobs()
-        files = {}
-
-        for blob in blobs:
-            files[blob.name] = blob.updated
-
-        latest_file = max(files, key=files.get)
-        blob = bucket.blob(latest_file)
-        blob.download_to_filename(f'./{latest_file}')
-
-        print(f'The latest uploaded file is: {latest_file} and it has been downloaded.')
-
-        cap = cv2.VideoCapture(f'./{latest_file}')
+        print(f'Running analysis on {video_path}...')
+        
+        cap = cv2.VideoCapture(video_path)
         fps = cap.get(cv2.CAP_PROP_FPS)
 
         frame_count = 0
@@ -49,54 +52,72 @@ def run_analysis():
 
         while True:
             ret, frame = cap.read()
-            if ret:
-                roi = frame[:frame.shape[0]//2, :]
-                result = DeepFace.extract_faces(roi, enforce_detection=False)
-                if len(result) > 0:
-                    face_coords = result[0]['facial_area']
-                    x, y, w, h = face_coords['x'], face_coords['y'], face_coords['w'], face_coords['h']
-                    face_image = roi[y:y+h, x:x+w]
-                    cv2.imshow("Frame", face_image)
-                    result = DeepFace.analyze(face_image, actions=['emotion'], enforce_detection=False, silent = True)
-                    print("Frame: {}".format(frame_count) + " Emotion: {}".format(result[0]['dominant_emotion']))
-                    emotions[frame_count] = result[0]['dominant_emotion']
-                    current_second = int(frame_count / fps)
-                    if current_second not in emotions_per_second:
-                        emotions_per_second[current_second] = {}
-                    if emotions[frame_count] not in emotions_per_second[current_second]:
-                        emotions_per_second[current_second][emotions[frame_count]] = 0
-                    emotions_per_second[current_second][emotions[frame_count]] += 1
-                    frame_count += 1
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
-            else:
+            if not ret:
                 break
 
-        result = {}
-        prev_emotion = None
-        emotion_start = 0
+            # Skip frames to reduce noise and improve speed
+            if frame_count % FRAME_SKIP != 0:
+                frame_count += 1
+                continue
+            
+            roi = frame[:frame.shape[0]//2, :]
+            refined_faces = hybrid_face_detection(roi)
+            
+            for (x, y, w, h) in refined_faces:
+                face_image = roi[y:y+h, x:x+w]
+                
+                # Preprocess the face
+                processed_face = preprocess_face(face_image)
+                
+                try:
+                    result_emotion = DeepFace.analyze(processed_face, actions=['emotion'], enforce_detection=False)[0]
+                    
+                    dominant_emotion = result_emotion['dominant_emotion']
+                    confidence = result_emotion['emotion'][dominant_emotion]
+                    
+                    # Ignore low-confidence predictions
+                    if confidence < EMOTION_CONFIDENCE_THRESHOLD:
+                        continue
+                    
+                    print(f"Frame: {frame_count} Emotion: {dominant_emotion} (Confidence: {confidence})")
+                    emotions[frame_count] = dominant_emotion
+                    current_second = int(frame_count / fps)
+                    
+                    if current_second not in emotions_per_second:
+                        emotions_per_second[current_second] = {}
+                    if dominant_emotion not in emotions_per_second[current_second]:
+                        emotions_per_second[current_second][dominant_emotion] = []
+                    
+                    emotions_per_second[current_second][dominant_emotion].append(confidence)
+                
+                except Exception as e:
+                    print(f"Error analyzing frame {frame_count}: {e}")
 
-        for second in emotions_per_second:
-            dominant_emotion = max(emotions_per_second[second], key=emotions_per_second[second].get)
-            result[str(second)] = {
-                "dominant_emotion": dominant_emotion,
-                "previous_emotion": prev_emotion
-            }
-            if prev_emotion is not None and dominant_emotion != prev_emotion:
-                result[str(second)]["emotion_change_detected"] = True
-                if (second - emotion_start) > 1:
-                    result[str(second)]["emotion_duration"] = second - emotion_start
-                emotion_start = second
-            prev_emotion = dominant_emotion
+            frame_count += 1
 
         cap.release()
-        cv2.destroyAllWindows()
-        os.remove(f'./{latest_file}')
-        return result
-        
+
+        # Temporal smoothing
+        smoothed_emotions = {}
+        for sec, emotion_data in emotions_per_second.items():
+            smoothed_emotion = max(emotion_data.keys(), key=lambda k: sum(emotion_data[k]) / len(emotion_data[k]))
+            smoothed_emotions[sec] = smoothed_emotion
+
+        return smoothed_emotions
 
     except Exception as e:
-        return {'error': str(e)}
+        print(f"Error running analysis: {e}")
+        return None
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) != 2:
+        print("Usage: python app.py <video_path>")
+        sys.exit(1)
+    
+    video_path = sys.argv[1]
+    result = run_analysis(video_path)
+    
+    if result is not None:
+        for sec, emotion in result.items():
+            print(f"Second {sec}: {emotion}")
